@@ -1,0 +1,30 @@
+quic-dkms (0~20260507.0000.git+70ceda0-1) trixie; urgency=medium
+
+  * Initial DKMS packaging of the lxin/quic in-kernel QUIC module.
+  * Tracks upstream commit 70ceda0ef2485d2916be47c81e439607571a5914
+    ("socket: use QUIC_MIN_PATH_TIMEOUT for keepalive_probe_interval",
+    2026-05-07) via the upstream/ git submodule.
+  * Builds and installs only the production quic.ko module; no user-space
+    or kernel header files are installed.
+  * Targets Debian Trixie on arm64.
+  * Ship patches/0001-socket-pick-recvmsg-signature-by-LINUX_VERSION_CODE
+    to fix the upstream IP_TUNNEL_RECURSION_LIMIT heuristic, which
+    misfires on stable 6.12.x kernels (e.g. Debian Trixie's
+    6.12.85+deb13-arm64) and selects a 4-arg recvmsg() form on a kernel
+    that still expects 5 args.  Use a direct
+    LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0) check instead --
+    that's the kernel version in which the addr_len argument was
+    actually removed by Linux commit 8341c989ac77.
+  * Version scheme: 0~YYYYmmdd.NNNN.git+<short>-<revision>, where
+      0~          is a fixed leading marker so this and any other
+                  pre-release snapshot sorts before any future "real"
+                  upstream 0.x release,
+      YYYYmmdd    is the upstream commit's committer date in UTC,
+      NNNN        is a 4-digit zero-padded snapshot counter (0000-9999),
+      <short>     is the upstream commit's short hash,
+      <revision>  is the Debian package revision (1-based), bumped
+                  for packaging-only changes against the same upstream.
+    Source format is now 3.0 (quilt); generate the orig tarball with
+    scripts/make-orig.sh before invoking dpkg-buildpackage.
+
+ -- Duncan Maitland <me@duncm.com>  Sun, 10 May 2026 02:50:00 +1000

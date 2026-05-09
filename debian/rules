@@ -1,0 +1,97 @@
+#!/usr/bin/make -f
+# debian/rules for quic-dkms
+
+include /usr/share/dpkg/pkg-info.mk
+
+# DKMS uses PACKAGE_NAME ("quic"), not the source package name, for the
+# directory under /usr/src and /var/lib/dkms.  We use DEB_VERSION_UPSTREAM
+# (i.e. the part of the Debian version BEFORE the trailing "-<revision>")
+# so that bumping the Debian revision for packaging-only changes does
+# not move the on-disk DKMS source tree.
+DKMS_NAME    := quic
+DKMS_VERSION := $(DEB_VERSION_UPSTREAM)
+
+DKMS_SRCDIR := debian/quic-dkms/usr/src/$(DKMS_NAME)-$(DKMS_VERSION)
+
+# Patches in debian/patches/series are applied to a staging copy of
+# upstream/ before the sources are installed into /usr/src. They are
+# *not* applied to the upstream/ submodule's working tree.
+STAGE := debian/_stage
+STAGE_MODULES := $(STAGE)/modules
+
+%:
+	dh $@ --with dkms
+
+# Nothing to compile at .deb-build time; everything happens on the user's
+# machine via DKMS once the package is installed.
+override_dh_auto_configure:
+override_dh_auto_build:
+override_dh_auto_test:
+
+override_dh_auto_clean:
+	rm -rf $(STAGE)
+	dh_auto_clean
+
+# Stage upstream sources, apply our local patches, then install only what
+# DKMS needs to build quic.ko:
+#   - kbuild Makefile and Kconfig for the module
+#   - the module's C/H sources
+#   - the in-tree headers it pulls in from include/{linux,uapi/linux}
+#   - a thin top-level Makefile that DKMS invokes
+override_dh_auto_install:
+	rm -rf $(STAGE)
+	mkdir -p $(STAGE)
+	cp -a upstream/modules $(STAGE_MODULES)
+	# Apply patches in debian/patches/series, in order. Lines starting
+	# with '#' and blank lines in debian/patches/series are skipped.
+	if [ -f debian/patches/series ]; then \
+	    while IFS= read -r p || [ -n "$$p" ]; do \
+	        case "$$p" in ''|\#*) continue ;; esac; \
+	        echo "Applying debian/patches/$$p"; \
+	        patch -d $(STAGE) --no-backup-if-mismatch -p1 \
+	            < debian/patches/$$p; \
+	    done < debian/patches/series; \
+	fi
+	install -d $(DKMS_SRCDIR)/net/quic
+	install -d $(DKMS_SRCDIR)/include/linux
+	install -d $(DKMS_SRCDIR)/include/uapi/linux
+	install -m 644 $(STAGE_MODULES)/net/quic/Makefile $(DKMS_SRCDIR)/net/quic/Makefile
+	install -m 644 $(STAGE_MODULES)/net/quic/Kconfig  $(DKMS_SRCDIR)/net/quic/Kconfig
+	install -m 644 $(STAGE_MODULES)/net/quic/common.c $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/common.h $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/cong.c     $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/cong.h     $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/connid.c   $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/connid.h   $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/crypto.c   $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/crypto.h   $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/family.c   $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/family.h   $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/frame.c    $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/frame.h    $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/inqueue.c  $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/inqueue.h  $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/outqueue.c $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/outqueue.h $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/packet.c   $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/packet.h   $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/path.c     $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/path.h     $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/pnspace.c  $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/pnspace.h  $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/protocol.c $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/protocol.h $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/socket.c   $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/socket.h   $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/stream.c   $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/stream.h   $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/timer.c    $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/net/quic/timer.h    $(DKMS_SRCDIR)/net/quic/
+	install -m 644 $(STAGE_MODULES)/include/linux/quic.h        $(DKMS_SRCDIR)/include/linux/quic.h
+	install -m 644 $(STAGE_MODULES)/include/uapi/linux/quic.h   $(DKMS_SRCDIR)/include/uapi/linux/quic.h
+	install -m 644 dkms/Makefile $(DKMS_SRCDIR)/Makefile
+
+# dh_dkms substitutes #MODULE_VERSION# with $(DEB_VERSION) and copies
+# debian/quic-dkms.dkms to /usr/src/quic-$(DEB_VERSION)/dkms.conf.
+override_dh_dkms:
+	dh_dkms -V $(DKMS_VERSION)

@@ -1,0 +1,33 @@
+Source: quic-dkms
+Section: kernel
+Priority: optional
+Maintainer: Duncan Maitland <me@duncm.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-dkms,
+Standards-Version: 4.7.0
+Homepage: https://github.com/lxin/quic
+Vcs-Git: https://github.com/duncm/quic-dkms.git
+Vcs-Browser: https://github.com/duncm/quic-dkms
+Rules-Requires-Root: no
+
+Package: quic-dkms
+Architecture: all
+Depends:
+ ${misc:Depends},
+ dkms,
+Recommends:
+ linux-headers-arm64 | linux-headers-generic | linux-headers-amd64 | linux-headers,
+Description: In-kernel QUIC protocol implementation (DKMS source)
+ The quic kernel module provides an in-kernel implementation of the
+ QUIC transport protocol (RFC 9000) for Linux. It exposes a new socket
+ family (IPPROTO_QUIC) so that user-space applications, and kernel
+ consumers such as SMB and NFS, can use QUIC with familiar socket
+ semantics. The TLS handshake itself is delegated to user space (for
+ example via tlshd from ktls-utils).
+ .
+ This package contains the source for the quic.ko module. DKMS will
+ automatically build and install the module against any installed
+ kernel that has matching kernel headers.
+ .
+ Upstream project: https://github.com/lxin/quic

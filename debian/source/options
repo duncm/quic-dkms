@@ -1,0 +1,8 @@
+# Files that may exist in the working tree but should never end up in
+# the .debian.tar.xz that dpkg-source generates.
+#
+# extend-diff-ignore is a Perl regex matched against each path; we use
+# it to strip Git metadata, the dpkg-buildpackage staging tree we use
+# for patch application (debian/_stage/), and any locally-generated
+# build artefacts.
+extend-diff-ignore = "(^|/)(\.git|\.gitignore|\.gitmodules|debian/_stage(/.*)?)$"

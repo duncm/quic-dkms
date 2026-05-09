@@ -1,0 +1,15 @@
+PACKAGE_NAME="quic"
+PACKAGE_VERSION="#MODULE_VERSION#"
+
+# We build a single kernel module (quic.ko) out-of-tree.
+BUILT_MODULE_NAME[0]="quic"
+BUILT_MODULE_LOCATION[0]="net/quic"
+DEST_MODULE_LOCATION[0]="/updates"
+
+# The top-level Makefile (see dkms/Makefile in the source tree) wraps the
+# upstream kbuild Makefile. KERNEL_DIR is the only thing it needs from
+# DKMS; CONFIG_IP_QUIC=m is hard-coded inside it so only quic.ko is built.
+MAKE[0]="'make' KERNEL_DIR=${kernel_source_dir}"
+CLEAN="'make' clean KERNEL_DIR=${kernel_source_dir}"
+
+AUTOINSTALL="yes"

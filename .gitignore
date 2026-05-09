@@ -1,0 +1,19 @@
+# Build artefacts produced by dpkg-buildpackage / debuild
+debian/.debhelper/
+debian/_stage/
+debian/files
+debian/*.debhelper
+debian/*.debhelper.log
+debian/*.substvars
+debian/quic-dkms/
+debian/quic-dkms.postinst.debhelper
+debian/quic-dkms.prerm.debhelper
+
+# Built .deb / source artefacts placed by dpkg-buildpackage one level up
+# (these never appear inside the repo itself, but are listed here for
+# completeness for users who run `debuild` from a parent directory).
+
+# Editor / OS noise
+*.swp
+*.swo
+.DS_Store

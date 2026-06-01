@@ -1,3 +1,9 @@
+quic-dkms (0~20260531.0000.git+84031ec-1) trixie; urgency=medium
+
+  * Bump upstream to 84031ec
+
+ -- Duncan Maitland <me@duncm.com>  Mon, 01 Jun 2026 12:35:35 +1000
+
 quic-dkms (0~20260507.0000.git+70ceda0-1) trixie; urgency=medium
 
   * Initial DKMS packaging of the lxin/quic in-kernel QUIC module.

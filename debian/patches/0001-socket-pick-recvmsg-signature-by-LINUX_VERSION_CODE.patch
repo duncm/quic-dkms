@@ -31,11 +31,11 @@ correct prototype is chosen on every kernel.  <linux/version.h> is
 already included at the top of socket.c, so no extra header is needed.
 
 ---
- modules/net/quic/socket.c | 11 ++++++++++-
+ upstream/modules/net/quic/socket.c | 11 ++++++++++-
  1 file changed, 10 insertions(+), 1 deletion(-)
 
---- a/modules/net/quic/socket.c
-+++ b/modules/net/quic/socket.c
+--- a/upstream/modules/net/quic/socket.c
++++ b/upstream/modules/net/quic/socket.c
 @@ -1281,7 +1281,16 @@ static int quic_wait_for_packet(struct sock *sk, struct list_head *head, u32 fla
  	return err;
  }

@@ -14,42 +14,64 @@ Initial target: **Debian Trixie / arm64** (the package itself is
 
 ```
 quic-dkms/
-├── upstream/             git submodule -> https://github.com/lxin/quic
-│                         pinned to a specific upstream commit
-├── patches/              local patches applied on top of upstream/
-│   ├── series            patches applied in order, '#' = comment
-│   └── *.patch
-├── debian/               Debian packaging (control, rules, .dkms, ...)
-├── dkms/Makefile         Top-level kbuild wrapper installed alongside
-│                         the module sources at /usr/src/quic-<ver>/
+├── upstream/                git submodule -> https://github.com/lxin/quic
+│                            pinned to a specific upstream commit
+├── debian/
+│   ├── patches/             local patches applied on top of upstream/
+│   │   ├── series           patches applied in order, '#' = comment
+│   │   └── *.patch          paths relative to the package root
+│   │                        (e.g. upstream/modules/net/quic/socket.c)
+│   ├── source/{format,options}
+│   ├── rules                debhelper sequence + DKMS install
+│   └── ... (control, copyright, changelog, quic-dkms.dkms)
+├── dkms/Makefile            Top-level kbuild wrapper installed alongside
+│                            the module sources at /usr/src/quic-<ver>/
 ├── scripts/
-│   └── update-version.sh Compute / apply a new package version from
-│                         the upstream submodule's HEAD commit
+│   ├── update-version.sh    Compute / apply a new package version from
+│   │                        the upstream submodule's HEAD commit
+│   └── make-orig.sh         Produce the .orig.tar.xz from the working tree
+├── .github/workflows/       CI: build amd64 + arm64 .debs and ship them
+│                            to a GitHub Release on every push to main
 └── README.md
 ```
 
 ## Local patches
 
-The upstream submodule is treated as read-only -- patches that we need
-on top of the pinned commit live in `patches/`, listed in
-`patches/series` (one filename per line, `-p1` relative to the upstream
-tree root, `#` and blank lines ignored).
+The upstream submodule is treated as read-only at rest -- patches that
+we need on top of the pinned commit live in `debian/patches/`, listed
+in `debian/patches/series` (one filename per line, `#` and blank lines
+ignored). Paths inside each patch are relative to the *package root*
+(`a/upstream/modules/...`, `b/upstream/modules/...`), and they apply
+with `patch -p1`.
 
-`debian/rules` stages `upstream/modules/` into `debian/_stage/`, applies
-each patch with `patch -p1`, and only then installs the (now patched)
-sources into `/usr/src/quic-<version>/`. Nothing is mutated in
-`upstream/` itself.
+This is the standard `3.0 (quilt)` layout, so:
+
+* `dpkg-source --before-build` (run automatically by `dpkg-buildpackage`)
+  applies every patch in `series` to the working tree before
+  `debian/rules` runs.
+* `debian/rules` then just copies the already-patched
+  `upstream/modules/...` into the DKMS source tree at
+  `/usr/src/quic-<upstream-version>/`.
+* `dpkg-source --after-build` un-applies the patches (we set
+  `unapply-patches` in `debian/source/options`), so the `upstream/`
+  submodule is left clean after every build.
 
 To add a new patch:
 
 ```sh
-cp -a upstream/modules /tmp/work/modules
-# edit /tmp/work/modules/...
-diff -ruN upstream/modules /tmp/work/modules \
-    | sed 's,^--- upstream/,--- a/,;s,^+++ /tmp/work/,+++ b/,' \
-    > patches/0002-my-fix.patch
-echo 0002-my-fix.patch >> patches/series
+# Bring upstream/ up to date.
+git submodule update --init upstream
+
+# Apply existing patches and start a quilt-managed new patch on top.
+QUILT_PATCHES=debian/patches quilt push -a
+QUILT_PATCHES=debian/patches quilt new 0002-my-fix.patch
+QUILT_PATCHES=debian/patches quilt add upstream/modules/net/quic/<file>
+# edit upstream/modules/net/quic/<file>
+QUILT_PATCHES=debian/patches quilt refresh
+QUILT_PATCHES=debian/patches quilt pop -a   # leave upstream/ clean again
 ```
+
+(`apt install quilt` if needed.)
 
 ## Versioning
 
@@ -97,7 +119,7 @@ git commit -am "Bump upstream to <short-hash>"
 From the repo root, on Debian Trixie:
 
 ```sh
-sudo apt install -y devscripts debhelper dh-dkms rsync xz-utils
+sudo apt install -y devscripts debhelper dh-dkms quilt rsync xz-utils
 git submodule update --init --recursive
 
 # Produce ../quic-dkms_<upstream-version>.orig.tar.xz from the working
@@ -105,11 +127,19 @@ git submodule update --init --recursive
 # changelog/version bump.
 scripts/make-orig.sh
 
+# Binary only:
 dpkg-buildpackage -b -us -uc
+# Or full set (binary + .dsc / .debian.tar.xz / *_source.changes):
+dpkg-buildpackage -us -uc
 ```
 
 The result, `../quic-dkms_<version>_all.deb`, can be installed on any
 Trixie system that has the matching `linux-headers-*` package.
+
+A GitHub Actions workflow at `.github/workflows/build-and-release.yml`
+performs this build on both amd64 and arm64 GitHub-hosted runners on
+every push to `main` and uploads the resulting artefacts to a GitHub
+Release tagged with the package version.
 
 ## Installing / using the module
 

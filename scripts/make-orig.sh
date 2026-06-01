@@ -5,7 +5,7 @@
 # The tarball contains the entire repo working tree EXCEPT:
 #   - debian/                           (lives in the .debian.tar.xz)
 #   - .git, .gitmodules, .gitignore     (Git infrastructure)
-#   - debian/_stage/                    (transient build staging dir)
+#   - .pc/                              (quilt state, only present mid-build)
 #   - the upstream submodule's own .git pointer
 #
 # The tarball ends up one directory above the repo root, named
@@ -54,8 +54,8 @@ rsync -a \
     --exclude='.git' \
     --exclude='.gitmodules' \
     --exclude='.gitignore' \
-    --exclude='/debian/_stage' \
-    --exclude='/debian/_stage/**' \
+    --exclude='/.pc' \
+    --exclude='/.pc/**' \
     --exclude='*.deb' \
     --exclude='*.changes' \
     --exclude='*.buildinfo' \

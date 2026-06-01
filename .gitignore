@@ -1,6 +1,5 @@
 # Build artefacts produced by dpkg-buildpackage / debuild
 debian/.debhelper/
-debian/_stage/
 debian/files
 debian/*.debhelper
 debian/*.debhelper.log
@@ -8,6 +7,13 @@ debian/*.substvars
 debian/quic-dkms/
 debian/quic-dkms.postinst.debhelper
 debian/quic-dkms.prerm.debhelper
+debian/debhelper-build-stamp
+
+# quilt state directory (created by `quilt push`/dpkg-source's quilt
+# machinery while patches in debian/patches/ are applied; normally
+# cleaned up by --after-build, but listed here in case a build is
+# interrupted before --after-build runs)
+.pc/
 
 # Built .deb / source artefacts placed by dpkg-buildpackage one level up
 # (these never appear inside the repo itself, but are listed here for

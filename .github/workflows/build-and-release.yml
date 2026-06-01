@@ -1,0 +1,209 @@
+name: build-and-release
+
+# Build a Debian Trixie .deb of quic-dkms on every push to main, on both
+# amd64 and arm64 GitHub-hosted runners, and upload the artefacts to a
+# GitHub Release tagged with the package version from debian/changelog.
+#
+# The .deb is "Architecture: all" (the kernel module is compiled on the
+# user's machine via DKMS), so the two arches produce a byte-identical
+# .deb -- the per-arch build is a sanity check that the source package
+# builds cleanly on both x86_64 and aarch64 hosts. Per-arch .changes /
+# .buildinfo files are uploaded to document each build environment.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel any in-flight build for the same branch when a newer push lands.
+concurrency:
+  group: build-and-release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# GitHub Actions defaults `run:` steps to /bin/sh (dash) when the job
+# runs inside a `container:`, but several steps below use bash-only
+# features (`shopt -s nullglob`, `${var//~/-}` parameter expansion).
+# `bash` is `Priority: required` on Debian, so it's present in
+# debian:trixie-slim and on any ubuntu-* runner without further setup.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # amd64 builds the full set: binary + source. The source
+          # artefacts (.dsc, *.orig.tar.xz, *.debian.tar.xz, *_source.*)
+          # are shipped from this job only.
+          - arch: amd64
+            runner: ubuntu-24.04
+            dpkg_buildpackage_flags: -us -uc
+          # arm64 builds binary only -- the source bits are identical to
+          # the amd64 ones, so re-uploading them would just collide.
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            dpkg_buildpackage_flags: -b -us -uc
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: debian:trixie-slim
+    steps:
+      - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          set -eux
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential \
+            ca-certificates \
+            debhelper \
+            devscripts \
+            dh-dkms \
+            dpkg-dev \
+            fakeroot \
+            git \
+            rsync \
+            xz-utils
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Containers run as root with a different uid from the host; tell
+      # git not to refuse the bind-mounted workspace because of that.
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory '*'
+
+      - name: Generate orig tarball
+        run: scripts/make-orig.sh
+
+      - name: Build package
+        run: dpkg-buildpackage ${{ matrix.dpkg_buildpackage_flags }}
+
+      - name: Stage build artefacts
+        run: |
+          set -eux
+          shopt -s nullglob
+          mkdir -p out
+          # dpkg-buildpackage drops everything one directory above the
+          # source tree.
+          for f in ../quic-dkms_*; do
+            cp -p "$f" out/
+          done
+          ls -la out
+
+      - name: Upload build artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: quic-dkms-${{ matrix.arch }}
+          path: out/
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dl
+
+      - name: Assemble release files
+        id: prepare
+        run: |
+          set -eux
+          mkdir -p release
+
+          # The .deb is Architecture: all and (with debhelper's
+          # dh_strip_nondeterminism + dpkg-buildpackage's
+          # SOURCE_DATE_EPOCH handling) reproducible across build hosts,
+          # so amd64 and arm64 produce the same binary. The amd64 job
+          # ran a full dpkg-buildpackage and so produced the .deb, the
+          # *.dsc / *.orig.tar.xz / *.debian.tar.xz source bundle, and a
+          # single *_amd64.changes / *_amd64.buildinfo manifest that
+          # covers both binary and source. The arm64 job ran with -b
+          # and produced just *_all.deb plus *_arm64.{changes,buildinfo}.
+          cp dl/quic-dkms-amd64/quic-dkms_*_all.deb          release/
+          cp dl/quic-dkms-amd64/quic-dkms_*.dsc              release/
+          cp dl/quic-dkms-amd64/quic-dkms_*.debian.tar.xz    release/
+          cp dl/quic-dkms-amd64/quic-dkms_*.orig.tar.xz      release/
+          cp dl/quic-dkms-amd64/quic-dkms_*_amd64.changes    release/
+          cp dl/quic-dkms-amd64/quic-dkms_*_amd64.buildinfo  release/
+          cp dl/quic-dkms-arm64/quic-dkms_*_arm64.changes    release/
+          cp dl/quic-dkms-arm64/quic-dkms_*_arm64.buildinfo  release/
+
+          # Sanity check: warn (don't fail) if the two Architecture: all
+          # .deb files diverge across build hosts.
+          if ! cmp -s dl/quic-dkms-amd64/quic-dkms_*_all.deb \
+                       dl/quic-dkms-arm64/quic-dkms_*_all.deb; then
+            echo "::warning::amd64 and arm64 builds produced different .deb files"
+          fi
+
+          deb=$(ls release/quic-dkms_*_all.deb)
+          version=$(dpkg --field "$deb" Version)
+          # Git refs cannot contain '~'; substitute it with '-' for the
+          # release tag (the release name keeps the original version).
+          tag="v${version//\~/-}"
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+
+          # SHA256SUMS for everything in the release.
+          ( cd release && sha256sum -- * > SHA256SUMS )
+
+          ls -la release
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.prepare.outputs.tag }}
+          name: quic-dkms ${{ steps.prepare.outputs.version }}
+          body: |
+            DKMS source package for the in-kernel QUIC module
+            ([lxin/quic](https://github.com/lxin/quic)) pinned to the
+            upstream commit referenced by this repo's `upstream/`
+            submodule.
+
+            ## Install (Debian Trixie, any architecture)
+
+            ```sh
+            sudo apt install dkms linux-headers-$(dpkg --print-architecture)
+            sudo apt install ./quic-dkms_${{ steps.prepare.outputs.version }}_all.deb
+            sudo modprobe quic
+            ```
+
+            ## What's in this release
+
+            * `quic-dkms_${{ steps.prepare.outputs.version }}_all.deb`
+              -- the binary package. `Architecture: all`; DKMS rebuilds
+              `quic.ko` against whichever kernel headers are installed.
+            * `quic-dkms_*.dsc`, `*.orig.tar.xz`, `*.debian.tar.xz` --
+              the Debian source package, for `dpkg-source -x` /
+              rebuilding from source.
+            * `*_amd64.{changes,buildinfo}` and
+              `*_arm64.{changes,buildinfo}` -- per-arch build manifests
+              from the amd64 and arm64 GitHub-hosted runners that
+              produced this release. The amd64 manifest covers both the
+              binary and the source upload (full `dpkg-buildpackage`);
+              the arm64 manifest covers the binary upload only.
+            * `SHA256SUMS` -- checksums of every file above.
+          files: release/*
+          fail_on_unmatched_files: true
+          # 0~... versions sort below any future "real" 0.x release in
+          # dpkg's ordering; surface that in the GH UI as a pre-release.
+          prerelease: ${{ startsWith(steps.prepare.outputs.version, '0~') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

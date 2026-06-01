@@ -2,7 +2,14 @@
 # the .debian.tar.xz that dpkg-source generates.
 #
 # extend-diff-ignore is a Perl regex matched against each path; we use
-# it to strip Git metadata, the dpkg-buildpackage staging tree we use
-# for patch application (debian/_stage/), and any locally-generated
-# build artefacts.
-extend-diff-ignore = "(^|/)(\.git|\.gitignore|\.gitmodules|debian/_stage(/.*)?)$"
+# it to strip Git metadata that has no place in a Debian source package.
+extend-diff-ignore = "(^|/)(\.git|\.gitignore|\.gitmodules)$"
+
+# Patches in debian/patches/ are applied to upstream/modules/* by
+# dpkg-source's quilt machinery before debian/rules runs.  Tell
+# dpkg-source to UNapply them in --after-build so that:
+#   * a fresh `dpkg-buildpackage` from git leaves the upstream/
+#     submodule's working tree clean (no spurious dirty files), and
+#   * a `dpkg-source -x` of our .dsc followed by a build doesn't
+#     accumulate "already applied" warnings on a second build.
+unapply-patches

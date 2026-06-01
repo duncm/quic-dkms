@@ -138,8 +138,20 @@ Trixie system that has the matching `linux-headers-*` package.
 
 A GitHub Actions workflow at `.github/workflows/build-and-release.yml`
 performs this build on both amd64 and arm64 GitHub-hosted runners on
-every push to `main` and uploads the resulting artefacts to a GitHub
-Release tagged with the package version.
+every push to `main`. In parallel, it also runs the upstream test
+suite (`upstream/tests/runtest.sh`) on each architecture: the test
+modules (`quic_sample_test.ko`) and user-space test binaries
+(`func_test`, `perf_test`, `alpn_test`, `ticket_test`, `sample_test`)
+are built from the patched upstream tree on the bare runner and the
+full suite is exercised against the runner's live kernel. The HTTP/3
+sub-suite is auto-skipped (no `libnghttp3-dev` installed in CI; it
+otherwise reaches out to ~14 public websites and is too flaky for
+CI), and the tlshd sub-suite is auto-skipped on runners without an
+active `tlshd` daemon. Releases only publish if both the build and
+the test jobs succeed on both architectures. None of these test
+modules end up in the published `.deb` -- the DKMS source tree
+installed by the package builds with `CONFIG_IP_QUIC=m` only, so
+users only ever get `quic.ko`.
 
 ## Installing / using the module
 

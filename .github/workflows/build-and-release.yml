@@ -108,9 +108,124 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  test:
+    name: Test (${{ matrix.arch }})
+    # Independent of `build`: the .deb build only compiles the production
+    # quic.ko (no test modules), whereas this job builds quic.ko +
+    # quic_sample_test.ko + the user-space test programs from the
+    # upstream tree (with our debian/patches/ applied) and exercises the
+    # full upstream/tests/runtest.sh suite against the runner's actual
+    # kernel.  We run on the bare runner (NOT inside `container:`) so
+    # that `insmod` and `tc` can talk to the live kernel.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Install build & test dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            autoconf \
+            automake \
+            build-essential \
+            iproute2 \
+            keyutils \
+            libgnutls28-dev \
+            libtool \
+            "linux-headers-$(uname -r)" \
+            openssl \
+            pkg-config \
+            quilt
+          # libnghttp3-dev is intentionally NOT installed: runtest.sh's
+          # http3_tests() exits successfully if <nghttp3/nghttp3.h> is
+          # absent.  The HTTP/3 sub-suite reaches out to ~14 public
+          # websites (cloudflare-quic.com, facebook.com, google.com,
+          # ...) and is far too flaky for CI; skipping it keeps the
+          # rest of the suite meaningful without external dependencies.
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Apply debian/patches/ to upstream/
+        # Use quilt directly (rather than dpkg-source --before-build) so
+        # this job doesn't need the full Debian build tooling chain.
+        env:
+          QUILT_PATCHES: debian/patches
+        run: |
+          set -eux
+          quilt push -a
+          quilt applied
+
+      - name: Build kernel modules (production + test) and user-space tests
+        working-directory: upstream
+        run: |
+          set -eux
+          ./autogen.sh
+          ./configure
+          # The top-level `make` recurses into modules/, libquic/, and
+          # tests/.  modules/Makefile.am passes both CONFIG_IP_QUIC=m
+          # and CONFIG_IP_QUIC_TEST=m so quic.ko AND quic_sample_test.ko
+          # are produced -- the test module is consumed by runtest.sh's
+          # tlshd_tests sub-suite (or auto-skipped if tlshd isn't up).
+          make -j"$(nproc)"
+          ls -la modules/net/quic/*.ko
+
+      - name: Run runtest.sh
+        working-directory: upstream/tests
+        # runtest.sh uses sudo-only operations: insmod, tc qdisc add,
+        # ip addr add, modprobe, etc.  GitHub-hosted runners give the
+        # workflow user passwordless sudo, so we just wrap the script.
+        run: |
+          set -eux
+          # The default test list is "func perf rr netem http3 tlshd
+          # alpn ticket sample".  http3_tests() auto-skips because
+          # libnghttp3-dev isn't installed (see install step), and
+          # tlshd_tests() auto-skips because the tlshd daemon isn't
+          # running.  All the other groups exercise the patched
+          # quic.ko + libquic + user-space test programs end-to-end.
+          sudo --preserve-env=PATH bash ./runtest.sh
+
+      - name: Capture diagnostics on failure
+        if: failure()
+        run: |
+          set +e
+          mkdir -p test-diagnostics
+          sudo dmesg --time-format iso > test-diagnostics/dmesg.log 2>&1
+          lsmod | grep -E '^(quic|udp_tunnel|sch_netem)' \
+              > test-diagnostics/lsmod.log 2>&1
+          ip -d link show     > test-diagnostics/ip-link.log 2>&1
+          ip addr show        > test-diagnostics/ip-addr.log 2>&1
+          tc qdisc show       > test-diagnostics/tc-qdisc.log 2>&1
+          uname -a            > test-diagnostics/uname.log
+          true
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-diagnostics-${{ matrix.arch }}
+          path: test-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 14
+
   release:
     name: Publish release
-    needs: build
+    # Both the .deb build and the upstream test suite must pass before
+    # we publish a release.  This way, a regression that compiles
+    # cleanly but breaks the protocol won't ship to GitHub Releases.
+    needs: [build, test]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

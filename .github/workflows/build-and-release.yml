@@ -165,8 +165,17 @@ jobs:
           QUILT_PATCHES: debian/patches
         run: |
           set -eux
-          quilt push -a
-          quilt applied
+          # `quilt push -a` exits non-zero ("No patches in series") when
+          # debian/patches/series is empty or comment-only, which would
+          # fail this step under `set -e`.  Only push when there's at
+          # least one real patch listed; otherwise upstream/ is already
+          # in the state we want to build.
+          if grep -qvE '^\s*(#.*)?$' debian/patches/series; then
+            quilt push -a
+            quilt applied
+          else
+            echo "debian/patches/series has no patches; nothing to apply."
+          fi
 
       - name: Build kernel modules (production + test) and user-space tests
         working-directory: upstream

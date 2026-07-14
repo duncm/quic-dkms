@@ -37,12 +37,17 @@ quic-dkms/
 
 ## Local patches
 
-The upstream submodule is treated as read-only at rest -- patches that
-we need on top of the pinned commit live in `debian/patches/`, listed
+The upstream submodule is treated as read-only at rest -- any patches
+we carry on top of the pinned commit live in `debian/patches/`, listed
 in `debian/patches/series` (one filename per line, `#` and blank lines
 ignored). Paths inside each patch are relative to the *package root*
 (`a/upstream/modules/...`, `b/upstream/modules/...`), and they apply
 with `patch -p1`.
+
+At the moment `debian/patches/series` is empty -- the pinned upstream
+commit builds unmodified against every kernel we target. The layout
+below is kept documented so patches can be re-added when they're
+needed.
 
 This is the standard `3.0 (quilt)` layout, so:
 

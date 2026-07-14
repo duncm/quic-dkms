@@ -1,6 +1,12 @@
 quic-dkms (0~20260713.0000.git+16209a3-1) trixie; urgency=medium
 
-  * Bump upstream to 16209a3
+  * Bump upstream to 16209a3.
+  * Drop patches/0001-socket-pick-recvmsg-signature-by-LINUX_VERSION_CODE.
+    Upstream commit 98f59f6 ("socket: fix for broken determination of
+    quic_recvmsg() call signature", Thomas Dreibholz, 2026-06-30) adopts
+    the same LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0) check the
+    patch introduced, so it is now redundant.  debian/patches/ retains
+    an empty series file as a placeholder for future local patches.
 
  -- Duncan Maitland <me@duncm.com>  Wed, 15 Jul 2026 00:53:05 +1000
 

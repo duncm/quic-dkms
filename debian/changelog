@@ -1,3 +1,16 @@
+quic-dkms (0~20260821.0000.git+bf47121-2) trixie; urgency=medium
+
+  * Add patches/0001-path-detect-udp-tunnel-sock-api.patch.  Kernel
+    7.1.8+deb13 carries the udp_tunnel conversion to "struct sock *"
+    without the unrelated RTEXT_FILTER_NAME_ONLY uapi macro that
+    upstream's path.c uses as a proxy for it, so the old
+    "struct socket *" call form was selected and quic.ko failed to
+    build.  Detect the declared prototype directly with
+    __builtin_types_compatible_p() instead.  Verified against
+    linux-headers 7.0.13+deb13, 7.1.3+deb13 and 7.1.8+deb13.
+
+ -- Duncan Maitland <me@duncm.com>  Tue, 25 Aug 2026 11:19:37 +1000
+
 quic-dkms (0~20260821.0000.git+bf47121-1) trixie; urgency=medium
 
   * Bump upstream to bf47121

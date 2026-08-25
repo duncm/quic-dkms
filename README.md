@@ -44,10 +44,17 @@ ignored). Paths inside each patch are relative to the *package root*
 (`a/upstream/modules/...`, `b/upstream/modules/...`), and they apply
 with `patch -p1`.
 
-At the moment `debian/patches/series` is empty -- the pinned upstream
-commit builds unmodified against every kernel we target. The layout
-below is kept documented so patches can be re-added when they're
-needed.
+Currently carried:
+
+* `0001-path-detect-udp-tunnel-sock-api.patch` — upstream chooses between
+  the old (`struct socket *`) and new (`struct sock *`) `udp_tunnel`
+  helper prototypes with `#ifdef RTEXT_FILTER_NAME_ONLY`, an unrelated
+  rtnetlink uapi macro used as a proxy for the mainline release that
+  carried the conversion. Stable kernels that backport the `udp_tunnel`
+  change on its own (Debian's `7.1.8+deb13`) have the new prototypes but
+  not that macro, so the old form is selected and `path.c` fails to
+  compile. The patch detects the declared prototype directly with
+  `__builtin_types_compatible_p()` instead.
 
 This is the standard `3.0 (quilt)` layout, so:
 

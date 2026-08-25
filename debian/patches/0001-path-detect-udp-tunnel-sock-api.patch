@@ -1,0 +1,93 @@
+Description: path: detect the udp_tunnel struct sock * API directly
+ Newer kernels convert setup_udp_tunnel_sock() and udp_tunnel_sock_release()
+ to take a "struct sock *" instead of a "struct socket *".
+ .
+ Upstream picks between the old and new call forms with
+ "#ifdef RTEXT_FILTER_NAME_ONLY" -- an unrelated rtnetlink uapi addition used
+ as a stand-in for the mainline release that carried the udp_tunnel change.
+ That proxy does not hold on stable kernels which backport the udp_tunnel
+ conversion on its own: Debian's 7.1.8+deb13 has the new prototypes but no
+ RTEXT_FILTER_NAME_ONLY, so the old form is selected and the build fails with
+ .
+   path.c:60:35: error: passing argument 1 of 'udp_tunnel_sock_release' from
+                 incompatible pointer type [-Wincompatible-pointer-types]
+   path.c:101:36: error: passing argument 2 of 'setup_udp_tunnel_sock' from
+                 incompatible pointer type [-Wincompatible-pointer-types]
+ .
+ Test the declared prototype itself with __builtin_types_compatible_p() rather
+ than a proxy macro, so the correct form is chosen on any kernel regardless of
+ which unrelated features it happens to carry. Both arms of the resulting
+ compile-time-constant "if" must type-check on either kernel, so the argument
+ is passed through "void *"; the dead arm is folded away and the generated
+ code is identical to the matching upstream branch.
+ .
+ Verified against linux-headers 7.0.13+deb13, 7.1.3+deb13 (both select the
+ "struct socket *" form) and 7.1.8+deb13 (selects "struct sock *"); all three
+ build quic.ko warning-free.
+Author: Duncan Maitland <me@duncm.com>
+Forwarded: no
+Last-Update: 2026-08-25
+--- a/upstream/modules/net/quic/path.c
++++ b/upstream/modules/net/quic/path.c
+@@ -18,6 +18,35 @@
+ #include "family.h"
+ #include "path.h"
+ 
++/* Newer kernels convert the udp_tunnel helpers to take a struct sock *
++ * instead of a struct socket *. Upstream selects between the two forms with
++ * "#ifdef RTEXT_FILTER_NAME_ONLY", an unrelated uapi addition used as a proxy
++ * for that mainline release; stable kernels can carry the udp_tunnel change
++ * without it (Debian's 7.1.8 does), and the proxy then picks the old form and
++ * fails to build. Test the declared prototype itself instead, and pass the
++ * argument through void * so both arms type-check on either kernel.
++ */
++#define QUIC_UDP_TUNNEL_TAKES_SOCK					\
++	__builtin_types_compatible_p(typeof(&udp_tunnel_sock_release),	\
++				     void (*)(struct sock *))
++
++static void quic_udp_tunnel_sock_release(struct sock *sk)
++{
++	if (QUIC_UDP_TUNNEL_TAKES_SOCK)
++		udp_tunnel_sock_release((void *)sk);
++	else
++		udp_tunnel_sock_release((void *)sk->sk_socket);
++}
++
++static void quic_setup_udp_tunnel_sock(struct net *net, struct socket *sock,
++				       struct udp_tunnel_sock_cfg *tuncfg)
++{
++	if (QUIC_UDP_TUNNEL_TAKES_SOCK)
++		setup_udp_tunnel_sock(net, (void *)sock->sk, tuncfg);
++	else
++		setup_udp_tunnel_sock(net, (void *)sock, tuncfg);
++}
++
+ static int quic_udp_rcv(struct sock *sk, struct sk_buff *skb)
+ {
+ 	quic_set_skb_iif(skb);
+@@ -54,11 +83,7 @@
+ 	 * to some lockdep warnings.
+ 	 */
+ 	sock_hold(sk);
+-#ifdef RTEXT_FILTER_NAME_ONLY
+-	udp_tunnel_sock_release(sk);
+-#else
+-	udp_tunnel_sock_release(sk->sk_socket);
+-#endif
++	quic_udp_tunnel_sock_release(sk);
+ 
+ 	head = quic_udp_sock_head(sock_net(sk), ntohs(us->addr.v4.sin_port));
+ 	mutex_lock(&head->lock);
+@@ -95,11 +120,7 @@
+ 	tuncfg.encap_type = 1;
+ 	tuncfg.encap_rcv = quic_udp_rcv;
+ 	tuncfg.encap_err_lookup = quic_udp_err;
+-#ifdef RTEXT_FILTER_NAME_ONLY
+-	setup_udp_tunnel_sock(net, sock->sk, &tuncfg);
+-#else
+-	setup_udp_tunnel_sock(net, sock, &tuncfg);
+-#endif
++	quic_setup_udp_tunnel_sock(net, sock, &tuncfg);
+ 
+ 	refcount_set(&us->refcnt, 1);
+ 	us->sk = sock->sk;

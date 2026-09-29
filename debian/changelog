@@ -1,3 +1,9 @@
+quic-dkms (0~20260928.0000.git+1e67d36-1) trixie; urgency=medium
+
+  * Bump upstream to 1e67d36
+
+ -- Duncan Maitland <me@duncm.com>  Tue, 29 Sep 2026 19:50:40 +1000
+
 quic-dkms (0~20260821.0000.git+bf47121-2) trixie; urgency=medium
 
   * Add patches/0001-path-detect-udp-tunnel-sock-api.patch.  Kernel

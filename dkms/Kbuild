@@ -1,0 +1,13 @@
+# Evaluate against kbuild's source and object trees: Debian splits headers
+# into a common source tree and an architecture-specific build tree.
+# Cleaning must also work before headers/symbols are ready for a build.
+ifneq ($(KBUILD_MODULES),)
+quic_compat_flags := $(shell sh $(ROOTDIR)/kernel-compat.sh \
+	"$(srctree)" "$(objtree)" "$(ROOTDIR)/configure.ac" || echo QUIC_COMPAT_ERROR)
+ifneq ($(filter QUIC_COMPAT_ERROR,$(quic_compat_flags)),)
+$(error QUIC kernel feature detection failed)
+endif
+
+subdir-ccflags-y += $(quic_compat_flags)
+endif
+obj-m += net/quic/

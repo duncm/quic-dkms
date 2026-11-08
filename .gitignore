@@ -20,6 +20,7 @@ debian/debhelper-build-stamp
 # completeness for users who run `debuild` from a parent directory).
 
 # Editor / OS noise
+__pycache__/
 *.swp
 *.swo
 .DS_Store

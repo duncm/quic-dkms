@@ -15,7 +15,7 @@ DKMS_SRCDIR := debian/quic-dkms/usr/src/$(DKMS_NAME)-$(DKMS_VERSION)
 
 # Patches in debian/patches/series are applied by dpkg-source's quilt
 # machinery before debian/rules ever runs (and unapplied afterwards by
-# the unapply-patches option in debian/source/local-options), so by the
+# the unapply-patches option in debian/source/options), so by the
 # time we reach override_dh_auto_install the upstream/ tree already
 # reflects the patched sources.
 UPSTREAM_MODULES := upstream/modules
@@ -33,7 +33,7 @@ override_dh_auto_test:
 #   - kbuild Makefile and Kconfig for the module
 #   - the module's C/H sources
 #   - the in-tree headers it pulls in from include/{linux,uapi/linux}
-#   - a thin top-level Makefile that DKMS invokes
+#   - the kbuild wrapper and upstream's kernel feature checks
 override_dh_auto_install:
 	install -d $(DKMS_SRCDIR)/net/quic
 	install -d $(DKMS_SRCDIR)/include/linux
@@ -73,6 +73,9 @@ override_dh_auto_install:
 	install -m 644 $(UPSTREAM_MODULES)/include/linux/quic.h        $(DKMS_SRCDIR)/include/linux/quic.h
 	install -m 644 $(UPSTREAM_MODULES)/include/uapi/linux/quic.h   $(DKMS_SRCDIR)/include/uapi/linux/quic.h
 	install -m 644 dkms/Makefile $(DKMS_SRCDIR)/Makefile
+	install -m 644 dkms/Kbuild $(DKMS_SRCDIR)/Kbuild
+	install -m 644 dkms/kernel-compat.sh $(DKMS_SRCDIR)/kernel-compat.sh
+	install -m 644 upstream/configure.ac $(DKMS_SRCDIR)/configure.ac
 
 # dh_dkms substitutes #MODULE_VERSION# with $(DKMS_VERSION) and copies
 # debian/quic-dkms.dkms to /usr/src/quic-$(DKMS_VERSION)/dkms.conf.

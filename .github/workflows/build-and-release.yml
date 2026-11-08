@@ -158,6 +158,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Test DKMS feature detection
+        run: python3 -B -m unittest discover -s tests -v
+
       - name: Apply debian/patches/ to upstream/
         # Use quilt directly (rather than dpkg-source --before-build) so
         # this job doesn't need the full Debian build tooling chain.

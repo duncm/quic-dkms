@@ -8,7 +8,9 @@
 
 KERNEL_DIR ?= /lib/modules/$(shell uname -r)/build
 ROOTDIR    := $(CURDIR)
-MODDIR     := $(ROOTDIR)/net/quic
+# The root Kbuild runs upstream's feature checks in the target kernel's
+# kbuild context before descending into net/quic/.
+MODDIR     := $(ROOTDIR)
 
 .PHONY: all modules clean install
 
@@ -19,7 +21,7 @@ modules:
 	    CONFIG_IP_QUIC=m modules
 
 clean:
-	$(MAKE) -C $(KERNEL_DIR) M=$(MODDIR) clean
+	$(MAKE) -C $(KERNEL_DIR) M=$(MODDIR) ROOTDIR=$(ROOTDIR) clean
 
 # install/uninstall are intentionally not implemented here -- DKMS handles
 # placing quic.ko into /lib/modules/<kver>/updates/ and running depmod.

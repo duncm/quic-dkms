@@ -1,4 +1,3 @@
 # List, one per line, the patches under debian/patches/ to apply to
 # upstream/ (via dpkg-source's quilt machinery) before the .deb is
 # built.  '#' and blank lines are ignored.
-0001-path-detect-udp-tunnel-sock-api.patch

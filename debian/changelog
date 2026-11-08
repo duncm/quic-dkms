@@ -1,3 +1,13 @@
+quic-dkms (0~20261106.0000.git+f7c258e-2) trixie; urgency=medium
+
+  * Drop the udp_tunnel prototype patch, superseded by upstream's
+    CHECK_KSYMS feature detection and no longer applying to path.c.
+  * Run upstream's feature checks from the DKMS kbuild wrapper against
+    the target kernel source and build trees, including split headers.
+    Ship configure.ac as the check list instead of duplicating it.
+
+ -- Duncan Maitland <me@duncm.com>  Mon, 09 Nov 2026 10:00:00 +1100
+
 quic-dkms (0~20261106.0000.git+f7c258e-1) trixie; urgency=medium
 
   * Bump upstream to f7c258e

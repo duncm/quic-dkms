@@ -24,8 +24,8 @@ quic-dkms/
 │   ├── source/{format,options}
 │   ├── rules                debhelper sequence + DKMS install
 │   └── ... (control, copyright, changelog, quic-dkms.dkms)
-├── dkms/Makefile            Top-level kbuild wrapper installed alongside
-│                            the module sources at /usr/src/quic-<ver>/
+├── dkms/                    Kbuild wrapper and kernel feature detection
+│                            installed at /usr/src/quic-<ver>/
 ├── scripts/
 │   ├── update-version.sh    Compute / apply a new package version from
 │   │                        the upstream submodule's HEAD commit
@@ -44,17 +44,9 @@ ignored). Paths inside each patch are relative to the *package root*
 (`a/upstream/modules/...`, `b/upstream/modules/...`), and they apply
 with `patch -p1`.
 
-Currently carried:
-
-* `0001-path-detect-udp-tunnel-sock-api.patch` — upstream chooses between
-  the old (`struct socket *`) and new (`struct sock *`) `udp_tunnel`
-  helper prototypes with `#ifdef RTEXT_FILTER_NAME_ONLY`, an unrelated
-  rtnetlink uapi macro used as a proxy for the mainline release that
-  carried the conversion. Stable kernels that backport the `udp_tunnel`
-  change on its own (Debian's `7.1.8+deb13`) have the new prototypes but
-  not that macro, so the old form is selected and `path.c` fails to
-  compile. The patch detects the declared prototype directly with
-  `__builtin_types_compatible_p()` instead.
+No patches are currently carried. Upstream's feature detection supersedes
+the former `udp_tunnel` prototype patch; the DKMS wrapper runs those checks
+against each target kernel (see Build details below).
 
 This is the standard `3.0 (quilt)` layout, so:
 
@@ -179,8 +171,17 @@ matching headers installed. The module is placed in
 
 ## Build details
 
-DKMS invokes the wrapper at `/usr/src/quic-<ver>/Makefile`, which calls
-the upstream kbuild `Makefile` in `net/quic/` with `CONFIG_IP_QUIC=m`.
+DKMS invokes the wrapper at `/usr/src/quic-<ver>/Makefile`. Its root `Kbuild`
+runs `kernel-compat.sh` using kbuild's target source and build trees, then
+descends into upstream's `net/quic/` with `CONFIG_IP_QUIC=m`.
+The helper reads the `CHECK_KSYMS` checks directly from the installed copy
+of upstream's `configure.ac` and supplies the resulting `LINUX_KERNEL_NO_*`
+compiler flags. Headers are checked in the target source tree and exported
+symbols in its build tree, supporting Debian's split header packages.
+Checks run on every module build, including when DKMS builds for a kernel
+other than the running one; no Autoconf or GnuTLS dependencies are needed.
+The adapter's regression tests run with
+`python3 -B -m unittest discover -s tests -v` and in both CI test jobs.
 Because `CONFIG_IP_QUIC_TEST` is intentionally left undefined, the
 upstream test modules (`quic_unit_test.ko`, `quic_sample_test.ko`) are
 *not* built.

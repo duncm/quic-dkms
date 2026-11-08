@@ -1,3 +1,9 @@
+quic-dkms (0~20261106.0000.git+f7c258e-1) trixie; urgency=medium
+
+  * Bump upstream to f7c258e
+
+ -- Duncan Maitland <me@duncm.com>  Mon, 09 Nov 2026 07:41:09 +1100
+
 quic-dkms (0~20260928.0000.git+1e67d36-1) trixie; urgency=medium
 
   * Bump upstream to 1e67d36
